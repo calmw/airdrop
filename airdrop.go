@@ -2,58 +2,32 @@ package main
 
 import (
 	"airdrop/blockchain"
-	"bufio"
-	"encoding/json"
-	"io"
+	"airdrop/db"
+	"fmt"
 	"log"
-	"os"
-	"strings"
 )
 
 func main() {
-	var userNfts []blockchain.UserNft
-	accountFile, err := os.Open("./account/account.txt") // 注意文件最后一行需要有换行，否则只能读到倒数第二行
+	db.InitMysql()
+	//blockchain.ImportToDb() // 将用户从文件导入数据库
+	//os.Exit(2)
+	err, users := blockchain.GetUser()
 	if err != nil {
-		log.Println("os.Open error ", err)
-		return
+		panic("can not find user")
 	}
-	defer accountFile.Close()
-	buf := bufio.NewReader(accountFile)
-	tokenIdStart := 0
-	for {
-		line, err := buf.ReadBytes('\n')
-		if err != nil {
-			if err == io.EOF {
-				log.Println("end of file")
-				break
-			} else {
-				log.Printf("read file err:%s", err.Error())
-				break
-			}
-		}
 
-		address := strings.TrimRight(string(line), "\n")
-		err, userNft := blockchain.AwardItem(address, tokenIdStart)
+	for _, u := range users {
+		err, tokenIdStart := blockchain.GetTokenIdStart()
 		if err != nil {
-			log.Println("awardItem failed", address, err)
+			panic("can not find token id")
 		}
-		userNfts = append(userNfts, userNft)
+		fmt.Println(tokenIdStart, "~~~")
+		err, _ = blockchain.AwardItem(u.User, int(tokenIdStart))
+		if err != nil {
+			log.Println("awardItem failed", u.User, err)
+			continue
+		}
 		tokenIdStart++
 	}
-	// Write to file
-	DumpFile("./data/nft.json", userNfts)
 
-}
-
-func DumpFile(filename string, userNfts []blockchain.UserNft) {
-	fp, err := os.Create(filename)
-	if err != nil {
-		panic(err)
-	}
-	defer fp.Close()
-	data, err := json.MarshalIndent(userNfts, "", "\t") // 带缩进的美化版
-	if err != nil {
-		panic(err)
-	}
-	fp.Write(data)
 }
